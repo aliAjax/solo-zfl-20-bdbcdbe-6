@@ -243,6 +243,41 @@ test("多材料整单：任一材料不足则整单拒绝", async () => {
   assert.equal(v2.body.data.totalRemaining, 1);
 });
 
+test("同一材料重复多行按合计校验，不允许负库存", async () => {
+  await resetDb();
+  const { materialId } = await makeMaterialWithInbound(5, 2);
+  const batchId = await makeStartedBatch();
+
+  const over = await api("POST", `/batches/${batchId}/requisitions`, {
+    requestId: uid("req"),
+    items: [
+      { materialId, quantity: 4 },
+      { materialId, quantity: 4 }
+    ]
+  });
+  assert.equal(over.status, 409, "合计8超过库存5，整单拒绝");
+
+  const view = await api("GET", `/materials/${materialId}`);
+  assert.equal(view.body.data.totalRemaining, 5, "拒绝后库存不变，不出现负库存");
+  const ledger = await api("GET", `/materials/${materialId}/ledger`);
+  assert.equal(ledger.body.data.filter((entry) => entry.type === "requisition").length, 0);
+
+  const exact = await api("POST", `/batches/${batchId}/requisitions`, {
+    requestId: uid("req"),
+    items: [
+      { materialId, quantity: 3 },
+      { materialId, quantity: 2 }
+    ]
+  });
+  assert.equal(exact.status, 201, "合计5等于库存，归并后正常领用");
+  assert.equal(exact.body.data.items.length, 1, "重复材料行归并为一个行项");
+  assert.equal(exact.body.data.items[0].quantity, 5);
+
+  const after = await api("GET", `/materials/${materialId}`);
+  assert.equal(after.body.data.totalRemaining, 0);
+  await assertLedgerConsistent(materialId);
+});
+
 test("同一领用请求重复提交只生效一次", async () => {
   await resetDb();
   const { materialId } = await makeMaterialWithInbound(10, 2);

@@ -270,12 +270,15 @@ function normalizeRequisitionItems(db, body) {
     fail(400, "缺少字段：items");
   }
   if (!items.length) fail(400, "items必须是非空数组");
-  return items.map((item) => {
+  // 先按材料归并求和，同一材料重复多行时以合计量校验和扣减，避免超卖为负库存
+  const merged = new Map();
+  for (const item of items) {
     if (!item || typeof item !== "object") fail(400, "items元素必须是对象");
     findMaterial(db, item.materialId);
     assertPositiveNumber(item.quantity, "quantity");
-    return { materialId: item.materialId, quantity: item.quantity };
-  });
+    merged.set(item.materialId, round2((merged.get(item.materialId) || 0) + item.quantity));
+  }
+  return [...merged.entries()].map(([materialId, quantity]) => ({ materialId, quantity }));
 }
 
 function requisitionFingerprint(repairBatchId, items) {
