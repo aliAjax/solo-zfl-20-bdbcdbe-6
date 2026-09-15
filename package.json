@@ -1,0 +1,10 @@
+{
+  "name": "rubbing-repair-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "古籍拓片缺损修补API（含材料库存与领用结算）",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/"
+  }
+}
